@@ -5,9 +5,9 @@ DallasTemperature sensors(&oneWire);
 DeviceAddress roomThermometer, waterThermometer;
 
 // 増速開始温度差(℃)
-const int temp_diff_min = 3;
+const int temp_diff_min = 5;
 // 全開温度差(℃)
-const int temp_diff_max = 18;
+const int temp_diff_max = 20;
 // 調整温度差レンジ
 const int temp_diff_range = temp_diff_max - temp_diff_min;
 
@@ -25,7 +25,7 @@ const int fan1_p2 = 60; // ベジェ曲線 点2 Y座標
 const int fan1_p3 = 90; // ベジェ曲線 点3 Y座標
 
 // FAN2設定(1500rpm用)
-const int fan2_min = 30;
+const int fan2_min = 25;
 const int fan2_p1 = 25;
 const int fan2_p2 = 50;
 const int fan2_p3 = 75;
@@ -82,8 +82,8 @@ void setup()
   TCCR1B = B00010001;
   TCNT1  = 0;
   ICR1   = 319;
-  OCR1A  = 319; // D9 (1200rpm Fan)
-  OCR1B  = 319; // D10 (1500rpm Fan)
+  OCR1A  = 159; // D9 (1200rpm Fan)
+  OCR1B  = 159; // D10 (1500rpm Fan)
 
   // Timer2 (Phase Correct PWM 25kHz TOP=39)
   TCCR2A = B00100001;
@@ -141,47 +141,47 @@ void loop()
   // 回転数調整
 
   // 使用率基準（ポンプのみ）
-  float duty_usage_2B;
+  float duty_usage_pump;
 
   if (cpu_usage < 0) {
     // 単独動作時は80%
-    duty_usage_2B = 80;
+    duty_usage_pump = 80;
   }
   else {
     // 使用率合計による補正
     int usage_sum = cpu_usage + gpu_usage;
     float usage_sum_ratio = (float) (constrain(usage_sum, 30, 150) - 30) / (150 - 30);
-    duty_usage_2B = getRatio4thBezier(95, 80, 70, usage_sum_ratio, 50);
+    duty_usage_pump = getRatio4thBezier(95, 80, 70, usage_sum_ratio, 50);
 
     // 単独使用率による補正
     if (cpu_usage >= 50 || gpu_usage >= 50) {
       float usage_max = (max(cpu_usage, gpu_usage) - 50) / 2 + 80;
       usage_max = min(usage_max, 100);
-      duty_usage_2B = max(duty_usage_2B, usage_max);
+      duty_usage_pump = max(duty_usage_pump, usage_max);
     }
   }
 
   // 温度差基準
   float temp_diff_ratio = (float) (constrain(temp_diff, temp_diff_min, temp_diff_max) - temp_diff_min) / temp_diff_range;
-  float duty_diff_1A = getRatio4thBezier(fan1_p1, fan1_p2, fan1_p3, temp_diff_ratio, fan1_min);
-  float duty_diff_1B = getRatio4thBezier(fan2_p1, fan2_p2, fan2_p3, temp_diff_ratio, fan2_min);
-  float duty_diff_2B = getRatio4thBezier(pump_p1, pump_p2, pump_p3, temp_diff_ratio, pump_min);
+  float duty_diff_fan1 = getRatio4thBezier(fan1_p1, fan1_p2, fan1_p3, temp_diff_ratio, fan1_min);
+  float duty_diff_fan2 = getRatio4thBezier(fan2_p1, fan2_p2, fan2_p3, temp_diff_ratio, fan2_min);
+  float duty_diff_pump = getRatio4thBezier(pump_p1, pump_p2, pump_p3, temp_diff_ratio, pump_min);
 
   // 水温基準
   float temp_water_ratio = (float) (constrain(temp_water, temp_water_min, temp_water_max) - temp_water_min) / temp_water_range;
-  float duty_water_1A = getRatio4thBezier(fan1_p1, fan1_p2, fan1_p3, temp_water_ratio, fan1_min);
-  float duty_water_1B = getRatio4thBezier(fan2_p1, fan2_p2, fan2_p3, temp_water_ratio, fan2_min);
-  float duty_water_2B = getRatio4thBezier(pump_p1, pump_p2, pump_p3, temp_water_ratio, pump_min);
+  float duty_water_fan1 = getRatio4thBezier(fan1_p1, fan1_p2, fan1_p3, temp_water_ratio, fan1_min);
+  float duty_water_fan2 = getRatio4thBezier(fan2_p1, fan2_p2, fan2_p3, temp_water_ratio, fan2_min);
+  float duty_water_pump = getRatio4thBezier(pump_p1, pump_p2, pump_p3, temp_water_ratio, pump_min);
   
   // 最も大きい値を採用
-  float duty_1A = max(duty_diff_1A, duty_water_1A);
-  float duty_1B = max(duty_diff_1B, duty_water_1B);
-  float duty_2B = max(duty_diff_1B, duty_water_1B);
-  duty_2B = max(duty_2B, duty_usage_2B);
+  float duty_fan1 = max(duty_diff_fan1, duty_water_fan1);
+  float duty_fan2 = max(duty_diff_fan2, duty_water_fan2);
+  float duty_pump = max(duty_diff_pump, duty_water_pump);
+  duty_pump = max(duty_pump, duty_usage_pump);
 
-  OCR1A = duty_1A * 319 / 100;
-  OCR1B = duty_1B * 319 / 100;
-  OCR2B = duty_2B * 39 / 100;
+  OCR1A = duty_fan2 * 319 / 100;
+  OCR1B = duty_fan1 * 319 / 100;
+  OCR2B = duty_pump * 39 / 100;
   
   //-------------------------------------------------------
   // シリアル通信
@@ -206,11 +206,11 @@ void loop()
   Serial.print(temp_water);
   Serial.print(",");
   // Duty比
-  Serial.print((int)duty_2B);
+  Serial.print((int)duty_pump);
   Serial.print(",");
-  Serial.print((int)duty_1A);
+  Serial.print((int)duty_fan1);
   Serial.print(",");
-  Serial.print((int)duty_1B);
+  Serial.print((int)duty_fan2);
   Serial.print(",");
   // 使用率
   Serial.print(cpu_usage);

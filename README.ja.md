@@ -12,6 +12,15 @@ Arduino製本格水冷PC用ファン・ポンプコントローラ
   - PCに回転数・Duty比・温度データを送信しモニタリング
   - PCからCPU・GPU使用率を受信し回転数制御に利用
 
+## 回路図
+
+![circuit diagram](https://raw.githubusercontent.com/wiki/xiphen-jp/WatercoolingController/images/watercooling_controller_circuit.png)
+![breadboard](https://raw.githubusercontent.com/wiki/xiphen-jp/WatercoolingController/images/watercooling_controller_breadboard.png)
+
+- ポンプ・ファンは増設可能
+- ポンプ・ファン合計14個まで回転数を検出可能
+  - 個々にローパスフィルタとプルアップ抵抗が必要
+
 ## 依存関係
 
 - 温度センサー用ライブラリ
